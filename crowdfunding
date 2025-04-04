@@ -1,0 +1,53 @@
+#![no_std]
+use soroban_sdk::{contract, contractimpl, Env, Address, Symbol};
+
+#[contract]
+pub struct CrowdfundingContract;
+
+#[derive(Clone)]
+pub struct Campaign {
+    owner: Address,
+    goal: u64,
+    raised: u64,
+    deadline: u64,
+}
+
+#[contractimpl]
+impl CrowdfundingContract {
+    pub fn create_campaign(env: Env, owner: Address, goal: u64, deadline: u64) -> Symbol {
+        let campaign = Campaign { owner, goal, raised: 0, deadline };
+        env.storage().set(&Symbol::new("campaign"), &campaign);
+        Symbol::new("CampaignCreated")
+    }
+
+    pub fn contribute(env: Env, sender: Address, amount: u64) -> Symbol {
+        let mut campaign: Campaign = env.storage().get(&Symbol::new("campaign")).unwrap();
+        
+        if env.ledger().timestamp() > campaign.deadline {
+            return Symbol::new("CampaignClosed");
+        }
+
+        campaign.raised += amount;
+        env.storage().set(&Symbol::new("campaign"), &campaign);
+
+        if campaign.raised >= campaign.goal {
+            return Symbol::new("GoalReached");
+        }
+
+        Symbol::new("ContributionReceived")
+    }
+
+    pub fn withdraw(env: Env) -> Symbol {
+        let campaign: Campaign = env.storage().get(&Symbol::new("campaign")).unwrap();
+
+        if env.ledger().timestamp() < campaign.deadline {
+            return Symbol::new("TooEarly");
+        }
+
+        if campaign.raised >= campaign.goal {
+            return Symbol::new("FundsTransferred");
+        } else {
+            return Symbol::new("RefundIssued");
+        }
+    }
+}
